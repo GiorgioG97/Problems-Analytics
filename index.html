@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Problem Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-elev: #171a21;
+    --bg-elev-2: #1f232c;
+    --border: #2a2f3a;
+    --border-strong: #3a4150;
+    --text: #e6e9ef;
+    --text-dim: #9aa3b2;
+    --text-faint: #6b7280;
+    --accent: #f97316;
+    --accent-dim: #c2410c;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --blue: #3b82f6;
+    --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .container { max-width: 1600px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  h1 .accent { color: var(--accent); }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    background: var(--bg-elev);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    padding: 8px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+  }
+
+  .btn:hover { background: var(--bg-elev-2); border-color: var(--accent); }
+
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0f1115; font-weight: 600; }
+  .btn.primary:hover { background: #fb923c; }
+
+  .btn.ghost { background: transparent; }
+
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  input[type="file"] { display: none; }
+
+  /* KPI cards */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .kpi {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    padding: 16px;
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+  }
+
+  .kpi.green::before { background: var(--green); }
+  .kpi.red::before { background: var(--red); }
+  .kpi.blue::before { background: var(--blue); }
+
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Filters */
+  .filters {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .filter-group label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-faint);
+  }
+
+  .filter-group input,
+  .filter-group select {
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 4px;
+    font-family: var(--sans);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .filter-group input:focus,
+  .filter-group select:focus {
+    border-color: var(--accent);
+  }
+
+  .filter-group.wide { grid-column: span 2; }
+
+  .filter-row-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    grid-column: 1 / -1;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    flex-wrap: wrap;
+  }
+
+  .result-count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .result-count b { color: var(--accent); }
+
+  /* Table */
+  .table-container {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .table-scroll { overflow-x: auto; max-height: 70vh; overflow-y: auto; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+
+  thead {
+    background: var(--bg-elev-2);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-dim);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  th:hover { color: var(--accent); }
+  th.sorted { color: var(--accent); }
+  th .sort-ind { opacity: 0.6; margin-left: 4px; }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tr:hover td { background: rgba(249,115,22,0.04); }
+
+  td.mono { font-family: var(--mono); font-size: 11.5px; }
+
+  td.number { color: var(--accent); font-weight: 500; }
+
+  td.incidence {
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+
+  .inc-high { color: var(--red); }
+  .inc-mid { color: var(--yellow); }
+  .inc-low { color: var(--green); }
+  .inc-zero { color: var(--text-faint); }
+
+  .state-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+
+  .state-Open { background: rgba(239,68,68,0.15); color: #fca5a5; }
+  .state-Closed\/Resolved { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+  .state-Cancelled { background: rgba(107,114,128,0.2); color: #9ca3af; }
+  .state-Pending\ Change { background: rgba(234,179,8,0.15); color: #fde047; }
+
+  .statement { max-width: 400px; }
+  .statement-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--text-dim);
+  }
+
+  .empty-state h3 { font-family: var(--mono); font-size: 16px; margin-bottom: 8px; color: var(--text); }
+
+  .drop-zone {
+    border: 2px dashed var(--border-strong);
+    border-radius: 8px;
+    padding: 50px 20px;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(249,115,22,0.03);
+  }
+
+  .drop-zone-icon { font-size: 32px; margin-bottom: 12px; }
+
+  .drop-zone-steps {
+    margin-top: 24px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .drop-zone-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    text-align: left;
+    max-width: 220px;
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(249,115,22,0.1);
+    border: 1px solid rgba(249,115,22,0.3);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-text {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .step-text b { color: var(--text); font-weight: 500; }
+
+  /* Detail expand */
+  .detail-row td {
+    background: var(--bg-elev-2) !important;
+    padding: 16px 24px;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+  }
+
+  .detail-item .lbl {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-faint);
+    margin-bottom: 4px;
+  }
+
+  .detail-item .val {
+    font-size: 12px;
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .expand-toggle {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .expand-toggle:hover { color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .filter-group.wide { grid-column: span 1; }
+    h1 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Problem Analytics <span class="accent">//</span> Dashboard</h1>
+  <div class="header-actions">
+    <a class="btn" id="snowLink"
+       href="https://amplifongroup.service-now.com/now/nav/ui/classic/params/target/problem_list.do%3Fsysparm_nostack%3Dtrue%26sysparm_query%3Du_user_countryINit%26sysparm_first_row%3D1%26sysparm_view%3D"
+       target="_blank" rel="noopener">
+      🔗 Apri ServiceNow
+    </a>
+    <label class="btn primary">
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+      📁 Carica XLSX
+    </label>
+    <button class="btn ghost" id="exportBtn" disabled>⤓ Export CSV</button>
+  </div>
+</header>
+
+<!-- KPIs -->
+<div class="kpi-grid" id="kpiGrid"></div>
+
+<!-- Filters -->
+<div class="filters" id="filtersPanel" style="display:none;">
+  <div class="filter-group wide">
+    <label>Cerca (number / problem statement)</label>
+    <input type="text" id="searchInput" placeholder="es. PRB0046 oppure 'FOX Offline'">
+  </div>
+  <div class="filter-group">
+    <label>State</label>
+    <select id="stateFilter">
+      <option value="">Tutti</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Assignment Group</label>
+    <select id="groupFilter">
+      <option value="">Tutti</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Created — Da</label>
+    <input type="date" id="dateFrom">
+  </div>
+  <div class="filter-group">
+    <label>Created — A</label>
+    <input type="date" id="dateTo">
+  </div>
+  <div class="filter-group">
+    <label>Incidence minima (tickets/giorno)</label>
+    <input type="number" id="minIncidence" placeholder="0.0" step="0.1" min="0">
+  </div>
+  <div class="filter-group">
+    <label>Min. Related Incidents</label>
+    <input type="number" id="minIncidents" placeholder="0" step="1" min="0">
+  </div>
+  <div class="filter-row-bottom">
+    <span class="result-count">Mostrando <b id="visibleCount">0</b> di <b id="totalCount">0</b> problems</span>
+    <button class="btn ghost" id="resetFilters">Reset filtri</button>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="table-container">
+  <div id="tableArea">
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-zone-icon">📊</div>
+      <h3 style="font-family: var(--mono); font-size: 16px; margin-bottom: 8px;">Nessun dato caricato</h3>
+      <p style="color: var(--text-dim);">Trascina qui il file XLSX oppure usa il pulsante "Carica XLSX" in alto.</p>
+      <div class="drop-zone-steps">
+        <div class="drop-zone-step">
+          <div class="step-num">1</div>
+          <div class="step-text">Apri <b>ServiceNow</b> dal pulsante in alto a destra</div>
+        </div>
+        <div class="drop-zone-step">
+          <div class="step-num">2</div>
+          <div class="step-text">Esporta la lista come <b>Excel (.xlsx)</b></div>
+        </div>
+        <div class="drop-zone-step">
+          <div class="step-num">3</div>
+          <div class="step-text">Trascina qui il file o clicca per selezionarlo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ============================================================================
+// STATE
+// ============================================================================
+const state = {
+  problems: [],
+  filtered: [],
+  sortCol: '_incidence',
+  sortDir: 'desc',
+  expanded: new Set(),
+};
+
+// ============================================================================
+// EXCEL DATE CONVERSION
+// ============================================================================
+function excelDateToISO(val) {
+  if (val === null || val === undefined || val === '') return null;
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') {
+    const d = new Date(val);
+    if (!isNaN(d)) return d.toISOString();
+    return null;
+  }
+  if (typeof val === 'number') {
+    const ms = (val - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    if (!isNaN(d)) return d.toISOString();
+  }
+  return null;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function daysBetween(isoStart, isoEnd) {
+  if (!isoStart) return 0;
+  const start = new Date(isoStart);
+  const end = isoEnd ? new Date(isoEnd) : new Date();
+  const diff = (end - start) / (1000 * 60 * 60 * 24);
+  return Math.max(diff, 0);
+}
+
+// ============================================================================
+// INCIDENCE COMPUTATION
+// Closed: incidents / days_open (final)
+// Open:   incidents / days_since_creation (ongoing)
+// ============================================================================
+function computeIncidence(p) {
+  const endIso = p.closed || null;
+  const days = daysBetween(p.created, endIso);
+  if (days < 0.0001) return p.incidents > 0 ? p.incidents : 0;
+  return p.incidents / days;
+}
+
+// ============================================================================
+// XLSX PARSING
+// ============================================================================
+function parseXLSX(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { raw: true, defval: null });
+
+        const parsed = rows.map(r => ({
+          number: String(r['Number'] ?? '').trim(),
+          created: excelDateToISO(r['Created']),
+          statement: String(r['Problem statement'] ?? '').trim(),
+          state: String(r['State'] ?? '').trim(),
+          group: String(r['Assignment group'] ?? '').trim(),
+          assignee: String(r['Assigned to'] ?? '').trim(),
+          incidents: Number(r['Related Incidents'] ?? 0) || 0,
+          closeNotes: String(r['Close notes'] ?? '').trim(),
+          updated: excelDateToISO(r['Updated']),
+          closed: excelDateToISO(r['Closed']),
+        })).filter(p => p.number);
+
+        resolve(parsed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Errore lettura file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ============================================================================
+// RENDER
+// ============================================================================
+function refreshDerived() {
+  state.problems.forEach(p => { p._incidence = computeIncidence(p); });
+}
+
+function renderKPIs() {
+  const grid = document.getElementById('kpiGrid');
+  if (state.problems.length === 0) { grid.innerHTML = ''; return; }
+
+  const all = state.filtered;
+  const open = all.filter(p => p.state === 'Open').length;
+  const closed = all.filter(p => p.state === 'Closed/Resolved').length;
+  const totalIncidents = all.reduce((s, p) => s + p.incidents, 0);
+  const avgInc = all.length ? (all.reduce((s,p) => s+p._incidence, 0)/all.length) : 0;
+  const topInc = [...all].sort((a,b)=>b._incidence-a._incidence)[0];
+
+  grid.innerHTML = `
+    <div class="kpi blue">
+      <div class="kpi-label">Total (filtrati)</div>
+      <div class="kpi-value">${all.length}</div>
+      <div class="kpi-sub">su ${state.problems.length} totali</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">Open</div>
+      <div class="kpi-value">${open}</div>
+      <div class="kpi-sub">ongoing</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Closed / Resolved</div>
+      <div class="kpi-value">${closed}</div>
+      <div class="kpi-sub">chiusi</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Related Incidents</div>
+      <div class="kpi-value">${totalIncidents.toLocaleString('it-IT')}</div>
+      <div class="kpi-sub">somma filtrati</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Avg Incidence</div>
+      <div class="kpi-value">${avgInc.toFixed(2)}</div>
+      <div class="kpi-sub">ticket/giorno medio</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">Top Incidence</div>
+      <div class="kpi-value">${topInc ? topInc._incidence.toFixed(2) : '—'}</div>
+      <div class="kpi-sub">${topInc ? topInc.number : '—'}</div>
+    </div>
+  `;
+}
+
+function incidenceClass(v) {
+  if (v === 0) return 'inc-zero';
+  if (v >= 2) return 'inc-high';
+  if (v >= 0.5) return 'inc-mid';
+  return 'inc-low';
+}
+
+function renderTable() {
+  const area = document.getElementById('tableArea');
+  if (state.problems.length === 0) {
+    document.getElementById('filtersPanel').style.display = 'none';
+    area.innerHTML = `
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-icon">📊</div>
+        <h3 style="font-family: var(--mono); font-size: 16px; margin-bottom: 8px;">Nessun dato caricato</h3>
+        <p style="color: var(--text-dim);">Trascina qui il file XLSX oppure usa il pulsante "Carica XLSX" in alto.</p>
+        <div class="drop-zone-steps">
+          <div class="drop-zone-step">
+            <div class="step-num">1</div>
+            <div class="step-text">Apri <b>ServiceNow</b> dal pulsante in alto a destra</div>
+          </div>
+          <div class="drop-zone-step">
+            <div class="step-num">2</div>
+            <div class="step-text">Esporta la lista come <b>Excel (.xlsx)</b></div>
+          </div>
+          <div class="drop-zone-step">
+            <div class="step-num">3</div>
+            <div class="step-text">Trascina qui il file o clicca per selezionarlo</div>
+          </div>
+        </div>
+      </div>`;
+    attachDropZone();
+    return;
+  }
+
+  document.getElementById('filtersPanel').style.display = 'grid';
+  document.getElementById('visibleCount').textContent = state.filtered.length;
+  document.getElementById('totalCount').textContent = state.problems.length;
+  document.getElementById('exportBtn').disabled = false;
+
+  if (state.filtered.length === 0) {
+    area.innerHTML = `<div class="empty-state"><h3>Nessun risultato</h3><p>Prova a modificare i filtri.</p></div>`;
+    return;
+  }
+
+  const sortInd = (col) => state.sortCol === col ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
+
+  const rowsHtml = state.filtered.map(p => {
+    const days = Math.max(Math.floor(daysBetween(p.created, p.closed)), 0);
+    const daysLabel = p.closed ? `${days}gg` : `${days}gg (ongoing)`;
+    const expanded = state.expanded.has(p.number);
+
+    const mainRow = `
+      <tr data-num="${p.number}">
+        <td><button class="expand-toggle" onclick="toggleExpand('${p.number.replace(/'/g, "\\'")}')">${expanded ? '▾' : '▸'}</button></td>
+        <td class="mono number">${p.number}</td>
+        <td class="mono">${fmtDate(p.created)}</td>
+        <td class="statement"><div class="statement-text" title="${escapeHtml(p.statement)}">${escapeHtml(p.statement)}</div></td>
+        <td><span class="state-badge state-${cssEscape(p.state)}">${escapeHtml(p.state)}</span></td>
+        <td>${escapeHtml(p.group)}</td>
+        <td class="mono" style="text-align:right;">${p.incidents}</td>
+        <td class="mono" style="text-align:right; color: var(--text-dim);">${daysLabel}</td>
+        <td class="incidence ${incidenceClass(p._incidence)}" style="text-align:right;">${p._incidence.toFixed(2)}</td>
+        <td class="mono" style="color: var(--text-dim);">${fmtDate(p.closed)}</td>
+      </tr>
+    `;
+
+    const detail = expanded ? `
+      <tr class="detail-row">
+        <td colspan="10">
+          <div class="detail-grid">
+            <div class="detail-item"><div class="lbl">Problem Statement</div><div class="val">${escapeHtml(p.statement) || '—'}</div></div>
+            <div class="detail-item"><div class="lbl">Assigned To</div><div class="val">${escapeHtml(p.assignee) || '—'}</div></div>
+            <div class="detail-item"><div class="lbl">Created</div><div class="val">${fmtDateTime(p.created)}</div></div>
+            <div class="detail-item"><div class="lbl">Updated</div><div class="val">${fmtDateTime(p.updated)}</div></div>
+            <div class="detail-item"><div class="lbl">Closed</div><div class="val">${fmtDateTime(p.closed)}</div></div>
+            <div class="detail-item"><div class="lbl">Incidence (tickets/giorno)</div><div class="val" style="font-family: var(--mono); font-weight:600;">${p._incidence.toFixed(4)}</div></div>
+            <div class="detail-item" style="grid-column: 1 / -1;"><div class="lbl">Close Notes</div><div class="val" style="white-space: pre-wrap;">${escapeHtml(p.closeNotes) || '—'}</div></div>
+          </div>
+        </td>
+      </tr>
+    ` : '';
+
+    return mainRow + detail;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px;"></th>
+            <th data-sort="number" class="${state.sortCol==='number'?'sorted':''}">Number <span class="sort-ind">${sortInd('number')}</span></th>
+            <th data-sort="created" class="${state.sortCol==='created'?'sorted':''}">Created <span class="sort-ind">${sortInd('created')}</span></th>
+            <th data-sort="statement" class="${state.sortCol==='statement'?'sorted':''}">Problem Statement <span class="sort-ind">${sortInd('statement')}</span></th>
+            <th data-sort="state" class="${state.sortCol==='state'?'sorted':''}">State <span class="sort-ind">${sortInd('state')}</span></th>
+            <th data-sort="group" class="${state.sortCol==='group'?'sorted':''}">Assignment Group <span class="sort-ind">${sortInd('group')}</span></th>
+            <th data-sort="incidents" class="${state.sortCol==='incidents'?'sorted':''}" style="text-align:right;">Incidents <span class="sort-ind">${sortInd('incidents')}</span></th>
+            <th style="text-align:right;">Days</th>
+            <th data-sort="_incidence" class="${state.sortCol==='_incidence'?'sorted':''}" style="text-align:right;">Incidence <span class="sort-ind">${sortInd('_incidence')}</span></th>
+            <th data-sort="closed" class="${state.sortCol==='closed'?'sorted':''}">Closed <span class="sort-ind">${sortInd('closed')}</span></th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+
+  area.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.getAttribute('data-sort');
+      if (state.sortCol === col) {
+        state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.sortCol = col;
+        state.sortDir = (col === '_incidence' || col === 'incidents' || col === 'created' || col === 'closed') ? 'desc' : 'asc';
+      }
+      applyFilters();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function cssEscape(s) { return String(s).replace(/[^a-zA-Z0-9]/g, '-'); }
+
+window.toggleExpand = function(num) {
+  if (state.expanded.has(num)) state.expanded.delete(num);
+  else state.expanded.add(num);
+  renderTable();
+};
+
+// ============================================================================
+// FILTERS
+// ============================================================================
+function populateFilterOptions() {
+  const stateSel = document.getElementById('stateFilter');
+  const groupSel = document.getElementById('groupFilter');
+
+  const states = [...new Set(state.problems.map(p => p.state).filter(Boolean))].sort();
+  const groups = [...new Set(state.problems.map(p => p.group).filter(Boolean))].sort();
+
+  const currentState = stateSel.value;
+  const currentGroup = groupSel.value;
+
+  stateSel.innerHTML = '<option value="">Tutti</option>' +
+    states.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  groupSel.innerHTML = '<option value="">Tutti</option>' +
+    groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+
+  stateSel.value = currentState;
+  groupSel.value = currentGroup;
+}
+
+function applyFilters() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const stateF = document.getElementById('stateFilter').value;
+  const groupF = document.getElementById('groupFilter').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  const minInc = parseFloat(document.getElementById('minIncidence').value);
+  const minTick = parseFloat(document.getElementById('minIncidents').value);
+
+  const fromTs = dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : null;
+  const toTs = dateTo ? new Date(dateTo + 'T23:59:59').getTime() : null;
+
+  state.filtered = state.problems.filter(p => {
+    if (q) {
+      const hay = (p.number + ' ' + p.statement).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (stateF && p.state !== stateF) return false;
+    if (groupF && p.group !== groupF) return false;
+    if (fromTs || toTs) {
+      if (!p.created) return false;
+      const ts = new Date(p.created).getTime();
+      if (fromTs && ts < fromTs) return false;
+      if (toTs && ts > toTs) return false;
+    }
+    if (!isNaN(minInc) && p._incidence < minInc) return false;
+    if (!isNaN(minTick) && p.incidents < minTick) return false;
+    return true;
+  });
+
+  const dir = state.sortDir === 'asc' ? 1 : -1;
+  state.filtered.sort((a, b) => {
+    const av = a[state.sortCol]; const bv = b[state.sortCol];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+
+  renderKPIs();
+  renderTable();
+}
+
+// ============================================================================
+// DATA LOADING
+// ============================================================================
+async function handleFileUpload(file) {
+  try {
+    const incoming = await parseXLSX(file);
+    state.problems = incoming;
+    refreshDerived();
+    populateFilterOptions();
+    applyFilters();
+  } catch (err) {
+    alert('Errore nel caricamento: ' + err.message);
+    console.error(err);
+  }
+}
+
+// ============================================================================
+// EXPORT
+// ============================================================================
+function exportCSV() {
+  if (state.filtered.length === 0) { alert('Nessun dato da esportare'); return; }
+  const headers = ['Number','Created','Problem statement','State','Assignment group','Assigned to','Related Incidents','Close notes','Updated','Closed','Incidence'];
+  const rows = state.filtered.map(p => [
+    p.number, p.created||'', p.statement, p.state, p.group, p.assignee,
+    p.incidents, (p.closeNotes||'').replace(/\n/g,' '), p.updated||'', p.closed||'', p._incidence.toFixed(4)
+  ]);
+  const csv = [headers, ...rows].map(r =>
+    r.map(v => {
+      const s = String(v??'');
+      return /[",\n;]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+    }).join(',')
+  ).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `problems_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ============================================================================
+// EVENT BINDING
+// ============================================================================
+function attachDropZone() {
+  const dz = document.getElementById('dropZone');
+  if (!dz) return;
+  ['dragenter','dragover'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dz.classList.add('drag-over');
+  }));
+  ['dragleave','drop'].forEach(evt => dz.addEventListener(evt, e => {
+    e.preventDefault(); e.stopPropagation();
+    dz.classList.remove('drag-over');
+  }));
+  dz.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f) handleFileUpload(f);
+  });
+  dz.addEventListener('click', () => document.getElementById('fileInput').click());
+}
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleFileUpload(f);
+  e.target.value = '';
+});
+
+['searchInput','stateFilter','groupFilter','dateFrom','dateTo','minIncidence','minIncidents']
+  .forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', applyFilters);
+    el.addEventListener('change', applyFilters);
+  });
+
+document.getElementById('resetFilters').addEventListener('click', () => {
+  ['searchInput','stateFilter','groupFilter','dateFrom','dateTo','minIncidence','minIncidents']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  applyFilters();
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+// ============================================================================
+// INIT
+// ============================================================================
+attachDropZone();
+renderTable();
+</script>
+</body>
+</html>
