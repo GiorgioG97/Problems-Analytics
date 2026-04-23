@@ -21,6 +21,7 @@
     --red: #ef4444;
     --yellow: #eab308;
     --blue: #3b82f6;
+    --purple: #a855f7;
     --mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
     --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
@@ -121,6 +122,7 @@
   .kpi.green::before { background: var(--green); }
   .kpi.red::before { background: var(--red); }
   .kpi.blue::before { background: var(--blue); }
+  .kpi.purple::before { background: var(--purple); }
 
   .kpi-label {
     font-family: var(--mono);
@@ -142,6 +144,35 @@
     font-size: 11px;
     color: var(--text-dim);
     margin-top: 4px;
+  }
+
+  .list-kpi-section {
+    margin-bottom: 12px;
+  }
+
+  .list-kpi-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+    background: rgba(168,85,247,0.08);
+    border-left: 3px solid var(--purple);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .list-kpi-header .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--purple);
+    font-weight: 600;
+  }
+
+  .list-kpi-header .info {
+    font-size: 11px;
+    color: var(--text-dim);
   }
 
   /* Filters */
@@ -168,10 +199,23 @@
     text-transform: uppercase;
     letter-spacing: 0.6px;
     color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .filter-group label .hint {
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-faint);
+    font-size: 10px;
+    opacity: 0.8;
   }
 
   .filter-group input,
-  .filter-group select {
+  .filter-group select,
+  .filter-group textarea {
     background: var(--bg);
     border: 1px solid var(--border-strong);
     color: var(--text);
@@ -183,12 +227,34 @@
     transition: border-color 0.15s;
   }
 
+  .filter-group textarea {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.4;
+  }
+
   .filter-group input:focus,
-  .filter-group select:focus {
+  .filter-group select:focus,
+  .filter-group textarea:focus {
     border-color: var(--accent);
   }
 
   .filter-group.wide { grid-column: span 2; }
+  .filter-group.full { grid-column: 1 / -1; }
+
+  .filter-group.list-filter label .tag-pill {
+    background: rgba(168,85,247,0.15);
+    color: var(--purple);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .filter-group.list-filter.active textarea {
+    border-color: var(--purple);
+    background: rgba(168,85,247,0.04);
+  }
 
   .filter-row-bottom {
     display: flex;
@@ -207,6 +273,7 @@
     color: var(--text-dim);
   }
   .result-count b { color: var(--accent); }
+  .result-count .list-match { color: var(--purple); margin-left: 10px; }
 
   /* Table */
   .table-container {
@@ -397,6 +464,17 @@
   }
   .expand-toggle:hover { color: var(--accent); }
 
+  .not-found {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: #fca5a5;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 6px;
+  }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
@@ -429,11 +507,29 @@
   </div>
 </header>
 
-<!-- KPIs -->
+<!-- List-specific KPIs (only visible when list filter is active) -->
+<div id="listKpiSection" class="list-kpi-section" style="display:none;">
+  <div class="list-kpi-header">
+    <span class="tag">📋 Lista personalizzata</span>
+    <span class="info" id="listKpiInfo"></span>
+  </div>
+  <div class="kpi-grid" id="listKpiGrid"></div>
+</div>
+
+<!-- Global KPIs -->
 <div class="kpi-grid" id="kpiGrid"></div>
 
 <!-- Filters -->
 <div class="filters" id="filtersPanel" style="display:none;">
+  <div class="filter-group full list-filter" id="listFilterGroup">
+    <label>
+      <span class="tag-pill">📋 Lista problems</span>
+      <span class="hint">— incolla i number separati da virgole, spazi o a capo. Se compilato, gli altri filtri sono ignorati.</span>
+    </label>
+    <textarea id="problemListInput" placeholder="PRB0046988, PRB0046930, PRB0046911&#10;oppure uno per riga"></textarea>
+    <div id="listNotFound"></div>
+  </div>
+
   <div class="filter-group wide">
     <label>Cerca (number / problem statement)</label>
     <input type="text" id="searchInput" placeholder="es. PRB0046 oppure 'FOX Offline'">
@@ -467,7 +563,10 @@
     <input type="number" id="minIncidents" placeholder="0" step="1" min="0">
   </div>
   <div class="filter-row-bottom">
-    <span class="result-count">Mostrando <b id="visibleCount">0</b> di <b id="totalCount">0</b> problems</span>
+    <span class="result-count">
+      Mostrando <b id="visibleCount">0</b> di <b id="totalCount">0</b> problems
+      <span class="list-match" id="listMatchInfo"></span>
+    </span>
     <button class="btn ghost" id="resetFilters">Reset filtri</button>
   </div>
 </div>
@@ -551,15 +650,19 @@ function daysBetween(isoStart, isoEnd) {
 }
 
 // ============================================================================
-// INCIDENCE COMPUTATION
-// Closed: incidents / days_open (final)
-// Open:   incidents / days_since_creation (ongoing)
+// DERIVED FIELDS
+// _incidence: incidents / days
+// _ageDays:   days open (final for closed, ongoing for open)
 // ============================================================================
-function computeIncidence(p) {
+function computeDerived(p) {
   const endIso = p.closed || null;
   const days = daysBetween(p.created, endIso);
-  if (days < 0.0001) return p.incidents > 0 ? p.incidents : 0;
-  return p.incidents / days;
+  p._ageDays = days;
+  if (days < 0.0001) {
+    p._incidence = p.incidents > 0 ? p.incidents : 0;
+  } else {
+    p._incidence = p.incidents / days;
+  }
 }
 
 // ============================================================================
@@ -599,10 +702,21 @@ function parseXLSX(file) {
 }
 
 // ============================================================================
+// PROBLEM LIST PARSING
+// Accepts any separator: commas, semicolons, spaces, tabs, newlines
+// Returns uppercased, deduplicated list of tokens (case-insensitive matching)
+// ============================================================================
+function parseProblemList(raw) {
+  if (!raw || !raw.trim()) return [];
+  const tokens = raw.split(/[\s,;|]+/).map(t => t.trim()).filter(Boolean);
+  return [...new Set(tokens.map(t => t.toUpperCase()))];
+}
+
+// ============================================================================
 // RENDER
 // ============================================================================
 function refreshDerived() {
-  state.problems.forEach(p => { p._incidence = computeIncidence(p); });
+  state.problems.forEach(computeDerived);
 }
 
 function renderKPIs() {
@@ -646,6 +760,54 @@ function renderKPIs() {
       <div class="kpi-label">Top Incidence</div>
       <div class="kpi-value">${topInc ? topInc._incidence.toFixed(2) : '—'}</div>
       <div class="kpi-sub">${topInc ? topInc.number : '—'}</div>
+    </div>
+  `;
+}
+
+function renderListKPIs(listItems, notFound) {
+  const section = document.getElementById('listKpiSection');
+  const grid = document.getElementById('listKpiGrid');
+  const info = document.getElementById('listKpiInfo');
+
+  if (listItems.length === 0 && notFound.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  const avgInc = listItems.length ? (listItems.reduce((s,p)=>s+p._incidence,0)/listItems.length) : 0;
+  const avgAge = listItems.length ? (listItems.reduce((s,p)=>s+p._ageDays,0)/listItems.length) : 0;
+  const totalInc = listItems.reduce((s,p)=>s+p.incidents,0);
+  const openN = listItems.filter(p => p.state === 'Open').length;
+
+  info.textContent = `${listItems.length} trovati · ${notFound.length} non trovati`;
+
+  grid.innerHTML = `
+    <div class="kpi purple">
+      <div class="kpi-label">Lista · Trovati</div>
+      <div class="kpi-value">${listItems.length}</div>
+      <div class="kpi-sub">${notFound.length > 0 ? notFound.length + ' non trovati' : 'tutti corrispondenti'}</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Lista · Avg Incidence</div>
+      <div class="kpi-value">${avgInc.toFixed(2)}</div>
+      <div class="kpi-sub">ticket/giorno medio</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Lista · Avg Ageing</div>
+      <div class="kpi-value">${avgAge.toFixed(0)}<span style="font-size:14px; color: var(--text-dim);">gg</span></div>
+      <div class="kpi-sub">giorni medi aperti</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Lista · Total Incidents</div>
+      <div class="kpi-value">${totalInc.toLocaleString('it-IT')}</div>
+      <div class="kpi-sub">somma ticket collegati</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Lista · Ancora Open</div>
+      <div class="kpi-value">${openN}</div>
+      <div class="kpi-sub">su ${listItems.length}</div>
     </div>
   `;
 }
@@ -698,7 +860,7 @@ function renderTable() {
   const sortInd = (col) => state.sortCol === col ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
 
   const rowsHtml = state.filtered.map(p => {
-    const days = Math.max(Math.floor(daysBetween(p.created, p.closed)), 0);
+    const days = Math.max(Math.floor(p._ageDays), 0);
     const daysLabel = p.closed ? `${days}gg` : `${days}gg (ongoing)`;
     const expanded = state.expanded.has(p.number);
 
@@ -748,7 +910,7 @@ function renderTable() {
             <th data-sort="state" class="${state.sortCol==='state'?'sorted':''}">State <span class="sort-ind">${sortInd('state')}</span></th>
             <th data-sort="group" class="${state.sortCol==='group'?'sorted':''}">Assignment Group <span class="sort-ind">${sortInd('group')}</span></th>
             <th data-sort="incidents" class="${state.sortCol==='incidents'?'sorted':''}" style="text-align:right;">Incidents <span class="sort-ind">${sortInd('incidents')}</span></th>
-            <th style="text-align:right;">Days</th>
+            <th data-sort="_ageDays" class="${state.sortCol==='_ageDays'?'sorted':''}" style="text-align:right;">Days <span class="sort-ind">${sortInd('_ageDays')}</span></th>
             <th data-sort="_incidence" class="${state.sortCol==='_incidence'?'sorted':''}" style="text-align:right;">Incidence <span class="sort-ind">${sortInd('_incidence')}</span></th>
             <th data-sort="closed" class="${state.sortCol==='closed'?'sorted':''}">Closed <span class="sort-ind">${sortInd('closed')}</span></th>
           </tr>
@@ -765,7 +927,7 @@ function renderTable() {
         state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
       } else {
         state.sortCol = col;
-        state.sortDir = (col === '_incidence' || col === 'incidents' || col === 'created' || col === 'closed') ? 'desc' : 'asc';
+        state.sortDir = (col === '_incidence' || col === 'incidents' || col === 'created' || col === 'closed' || col === '_ageDays') ? 'desc' : 'asc';
       }
       applyFilters();
     });
@@ -807,6 +969,47 @@ function populateFilterOptions() {
 }
 
 function applyFilters() {
+  const listRaw = document.getElementById('problemListInput').value;
+  const list = parseProblemList(listRaw);
+  const listGroup = document.getElementById('listFilterGroup');
+  const listMatchInfo = document.getElementById('listMatchInfo');
+  const listNotFoundEl = document.getElementById('listNotFound');
+
+  // ---- List filter branch: if list is non-empty, IT'S THE ONLY FILTER ----
+  if (list.length > 0) {
+    listGroup.classList.add('active');
+    const byNum = new Map(state.problems.map(p => [p.number.toUpperCase(), p]));
+    const found = [];
+    const notFound = [];
+    list.forEach(num => {
+      const p = byNum.get(num);
+      if (p) found.push(p);
+      else notFound.push(num);
+    });
+
+    // Preserve list insertion order, but allow column sort to override
+    state.filtered = found.slice();
+    sortFiltered();
+
+    listMatchInfo.innerHTML = `· <b style="color: var(--purple)">${found.length}</b> dalla lista`
+      + (notFound.length ? ` · <span style="color: var(--red)">${notFound.length} non trovati</span>` : '');
+
+    listNotFoundEl.innerHTML = notFound.length
+      ? `<div class="not-found">⚠ Non trovati nel file: ${notFound.map(escapeHtml).join(', ')}</div>`
+      : '';
+
+    renderListKPIs(found, notFound);
+    renderKPIs();
+    renderTable();
+    return;
+  }
+
+  // ---- Normal filter branch ----
+  listGroup.classList.remove('active');
+  listMatchInfo.innerHTML = '';
+  listNotFoundEl.innerHTML = '';
+  renderListKPIs([], []);
+
   const q = document.getElementById('searchInput').value.trim().toLowerCase();
   const stateF = document.getElementById('stateFilter').value;
   const groupF = document.getElementById('groupFilter').value;
@@ -836,6 +1039,12 @@ function applyFilters() {
     return true;
   });
 
+  sortFiltered();
+  renderKPIs();
+  renderTable();
+}
+
+function sortFiltered() {
   const dir = state.sortDir === 'asc' ? 1 : -1;
   state.filtered.sort((a, b) => {
     const av = a[state.sortCol]; const bv = b[state.sortCol];
@@ -845,9 +1054,6 @@ function applyFilters() {
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
     return String(av).localeCompare(String(bv)) * dir;
   });
-
-  renderKPIs();
-  renderTable();
 }
 
 // ============================================================================
@@ -871,10 +1077,11 @@ async function handleFileUpload(file) {
 // ============================================================================
 function exportCSV() {
   if (state.filtered.length === 0) { alert('Nessun dato da esportare'); return; }
-  const headers = ['Number','Created','Problem statement','State','Assignment group','Assigned to','Related Incidents','Close notes','Updated','Closed','Incidence'];
+  const headers = ['Number','Created','Problem statement','State','Assignment group','Assigned to','Related Incidents','Close notes','Updated','Closed','Days Open','Incidence'];
   const rows = state.filtered.map(p => [
     p.number, p.created||'', p.statement, p.state, p.group, p.assignee,
-    p.incidents, (p.closeNotes||'').replace(/\n/g,' '), p.updated||'', p.closed||'', p._incidence.toFixed(4)
+    p.incidents, (p.closeNotes||'').replace(/\n/g,' '), p.updated||'', p.closed||'',
+    p._ageDays.toFixed(2), p._incidence.toFixed(4)
   ]);
   const csv = [headers, ...rows].map(r =>
     r.map(v => {
@@ -916,7 +1123,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
   e.target.value = '';
 });
 
-['searchInput','stateFilter','groupFilter','dateFrom','dateTo','minIncidence','minIncidents']
+['searchInput','stateFilter','groupFilter','dateFrom','dateTo','minIncidence','minIncidents','problemListInput']
   .forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener('input', applyFilters);
@@ -924,7 +1131,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
   });
 
 document.getElementById('resetFilters').addEventListener('click', () => {
-  ['searchInput','stateFilter','groupFilter','dateFrom','dateTo','minIncidence','minIncidents']
+  ['searchInput','stateFilter','groupFilter','dateFrom','dateTo','minIncidence','minIncidents','problemListInput']
     .forEach(id => { document.getElementById(id).value = ''; });
   applyFilters();
 });
