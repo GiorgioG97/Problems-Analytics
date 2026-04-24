@@ -651,17 +651,22 @@ function daysBetween(isoStart, isoEnd) {
 
 // ============================================================================
 // DERIVED FIELDS
-// _incidence: incidents / days
-// _ageDays:   days open (final for closed, ongoing for open)
+// _incidence: incidents / days_since_creation_until_TODAY
+//             (sempre riferito a oggi, sia per problem aperti che chiusi:
+//              rappresenta quanti ticket/giorno in media ha generato il
+//              problem fino ad oggi)
+// _ageDays:   giorni di apertura (tempo finale per i chiusi, ongoing per gli open)
 // ============================================================================
 function computeDerived(p) {
-  const endIso = p.closed || null;
-  const days = daysBetween(p.created, endIso);
-  p._ageDays = days;
-  if (days < 0.0001) {
+  // Ageing: tempo effettivo che il problem è stato/è aperto
+  p._ageDays = daysBetween(p.created, p.closed || null);
+
+  // Incidence: sempre riferita a OGGI, indipendentemente dallo state
+  const daysSinceCreation = daysBetween(p.created, null);
+  if (daysSinceCreation < 0.0001) {
     p._incidence = p.incidents > 0 ? p.incidents : 0;
   } else {
-    p._incidence = p.incidents / days;
+    p._incidence = p.incidents / daysSinceCreation;
   }
 }
 
